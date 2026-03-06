@@ -249,7 +249,7 @@
     <section class="card header">
       <div class="title">
         <h1>图片局部模糊</h1>
-        <span class="tag">iPhone 优化</span>
+        <span class="tag">iPhone 优化 v2026-03-06b</span>
       </div>
       <p class="hint">编辑模式支持矩形、圆形和涂抹。双指缩放、单指拖动查看；按住“查看原图”可快速对比。</p>
     </section>
@@ -293,7 +293,7 @@
       </div>
     </section>
 
-    <p class="foot">提示：双指缩放画面，单指可拖动画面；编辑时若误触移动，可点“重置视图”。</p>
+    <p class="foot">提示：双指缩放画面，单指可拖动画面；编辑时若误触移动，可点“重置视图”。版本 v2026-03-06b</p>
   </main>
 
   <script>
@@ -326,6 +326,8 @@
 
     const tempBlurCanvas = document.createElement('canvas');
     const tempBlurCtx = tempBlurCanvas.getContext('2d');
+    const tempScaleCanvas = document.createElement('canvas');
+    const tempScaleCtx = tempScaleCanvas.getContext('2d');
 
     let hasImage = false;
     let activeTool = 'rect';
@@ -474,12 +476,12 @@
       const w = Math.max(1, Math.round(img.naturalWidth * scale));
       const h = Math.max(1, Math.round(img.naturalHeight * scale));
 
-      [canvas, workCanvas, originalCanvas, tempBlurCanvas].forEach((cv) => {
+      [canvas, workCanvas, originalCanvas, tempBlurCanvas, tempScaleCanvas].forEach((cv) => {
         cv.width = w;
         cv.height = h;
       });
 
-      [ctx, workCtx, originalCtx, tempBlurCtx].forEach((context) => {
+      [ctx, workCtx, originalCtx, tempBlurCtx, tempScaleCtx].forEach((context) => {
         context.setTransform(1, 0, 0, 1, 0, 0);
       });
 
@@ -514,10 +516,27 @@
     }
 
     function makeBlurLayer() {
-      tempBlurCtx.clearRect(0, 0, tempBlurCanvas.width, tempBlurCanvas.height);
-      tempBlurCtx.filter = `blur(${Number(blurRange.value)}px)`;
-      tempBlurCtx.drawImage(workCanvas, 0, 0);
-      tempBlurCtx.filter = 'none';
+      const width = tempBlurCanvas.width;
+      const height = tempBlurCanvas.height;
+      const strength = Math.max(2, Number(blurRange.value));
+      const ratio = Math.max(0.06, 1 / (1 + strength * 0.22));
+      const smallW = Math.max(1, Math.round(width * ratio));
+      const smallH = Math.max(1, Math.round(height * ratio));
+      const passes = strength > 28 ? 3 : 2;
+
+      tempBlurCtx.clearRect(0, 0, width, height);
+      tempBlurCtx.imageSmoothingEnabled = true;
+      tempBlurCtx.imageSmoothingQuality = 'high';
+      tempScaleCtx.imageSmoothingEnabled = true;
+      tempScaleCtx.imageSmoothingQuality = 'high';
+      tempBlurCtx.drawImage(workCanvas, 0, 0, width, height);
+
+      for (let i = 0; i < passes; i += 1) {
+        tempScaleCtx.clearRect(0, 0, width, height);
+        tempScaleCtx.drawImage(tempBlurCanvas, 0, 0, width, height, 0, 0, smallW, smallH);
+        tempBlurCtx.clearRect(0, 0, width, height);
+        tempBlurCtx.drawImage(tempScaleCanvas, 0, 0, smallW, smallH, 0, 0, width, height);
+      }
     }
 
     function blurRect(a, b) {
