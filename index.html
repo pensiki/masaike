@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>模糊马赛克工具</title>
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --panel: #ffffff;
+      --ink: #16202a;
+      --muted: #627081;
+      --brand: #0074e8;
+      --brand-strong: #0057b8;
+      --line: #d7dee6;
+      --danger: #cf3f3f;
+      --shadow: 0 14px 34px rgba(17, 32, 52, 0.14);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+      background: radial-gradient(circle at top, #fbfcff 0%, var(--bg) 55%, #edf2f7 100%);
+      color: var(--ink);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(18px, env(safe-area-inset-bottom));
+    }
+
+    .app {
+      width: min(100%, 440px);
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .header {
+      padding: 14px 14px 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0.2px;
+    }
+
+    .tag {
+      font-size: 11px;
+      color: var(--brand-strong);
+      background: #e8f2ff;
+      border: 1px solid #c8ddff;
+      padding: 4px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .hint {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .stage-wrap {
+      padding: 10px;
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #edf1f7 25%, transparent 25%) 0 0/16px 16px,
+        linear-gradient(-45deg, #edf1f7 25%, transparent 25%) 0 0/16px 16px,
+        linear-gradient(45deg, transparent 75%, #edf1f7 75%) 0 0/16px 16px,
+        linear-gradient(-45deg, transparent 75%, #edf1f7 75%) 0 0/16px 16px,
+        #f8fafc;
+      border: 1px solid var(--line);
+      min-height: 240px;
+      max-height: 68vh;
+      display: grid;
+      place-items: center;
+    }
+
+    .canvas-viewport {
+      width: 100%;
+      height: 100%;
+      min-height: inherit;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      touch-action: none;
+    }
+
+    #canvas {
+      width: 100%;
+      height: auto;
+      display: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .empty {
+      padding: 30px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink);
+      min-height: 42px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 10px;
+      cursor: pointer;
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .btn.primary {
+      background: linear-gradient(180deg, var(--brand), var(--brand-strong));
+      color: #fff;
+      border-color: #0053a8;
+    }
+
+    .btn.active {
+      background: #e7f1ff;
+      border-color: #9bc4ff;
+      color: #0f4a8f;
+    }
+
+    .btn.warn { color: var(--danger); }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .range-row {
+      display: grid;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f9fbfd;
+    }
+
+    .range-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .file-input {
+      position: relative;
+      overflow: hidden;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .file-input input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .foot {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 8px 4px;
+    }
+
+    @media (min-height: 890px) {
+      .stage { min-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="card header">
+      <div class="title">
+        <h1>图片局部模糊</h1>
+        <span class="tag">iPhone 优化</span>
+      </div>
+      <p class="hint">编辑模式支持矩形、圆形和涂抹。双指缩放、单指拖动查看；按住“查看原图”可快速对比。</p>
+    </section>
+
+    <section class="card stage-wrap">
+      <div id="stage" class="stage">
+        <div id="viewport" class="canvas-viewport">
+          <canvas id="canvas"></canvas>
+          <div id="empty" class="empty">点击下方“上传图片”开始编辑</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card controls">
+      <div class="toolbar">
+        <button id="toolRect" class="btn active" type="button">矩形</button>
+        <button id="toolCircle" class="btn" type="button">圆形</button>
+        <button id="toolBrush" class="btn" type="button">涂抹</button>
+        <button id="compareBtn" class="btn" type="button">查看原图</button>
+      </div>
+
+      <div class="range-row">
+        <div class="range-head"><span>模糊强度</span><span id="blurValue">18 px</span></div>
+        <input id="blurRange" type="range" min="4" max="44" step="1" value="18" />
+      </div>
+
+      <div class="range-row">
+        <div class="range-head"><span>画笔大小</span><span id="brushValue">40 px</span></div>
+        <input id="brushRange" type="range" min="12" max="140" step="1" value="40" />
+      </div>
+
+      <div class="actions">
+        <label class="file-input btn primary">上传图片
+          <input id="uploadInput" type="file" accept="image/*" />
+        </label>
+        <button id="saveBtn" class="btn primary" type="button">导出 PNG</button>
+        <button id="undoBtn" class="btn" type="button">撤销</button>
+        <button id="redoBtn" class="btn" type="button">重做</button>
+        <button id="resetBtn" class="btn warn" type="button">恢复原图</button>
+        <button id="fitBtn" class="btn" type="button">重置视图</button>
+      </div>
+    </section>
+
+    <p class="foot">提示：双指缩放画面，单指可拖动画面；编辑时若误触移动，可点“重置视图”。</p>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const emptyEl = document.getElementById('empty');
+    const stageEl = document.getElementById('stage');
+
+    const uploadInput = document.getElementById('uploadInput');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const fitBtn = document.getElementById('fitBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const compareBtn = document.getElementById('compareBtn');
+
+    const toolRectBtn = document.getElementById('toolRect');
+    const toolCircleBtn = document.getElementById('toolCircle');
+    const toolBrushBtn = document.getElementById('toolBrush');
+
+    const blurRange = document.getElementById('blurRange');
+    const blurValue = document.getElementById('blurValue');
+    const brushRange = document.getElementById('brushRange');
+    const brushValue = document.getElementById('brushValue');
+
+    const workCanvas = document.createElement('canvas');
+    const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+    const originalCanvas = document.createElement('canvas');
+    const originalCtx = originalCanvas.getContext('2d');
+
+    const tempBlurCanvas = document.createElement('canvas');
+    const tempBlurCtx = tempBlurCanvas.getContext('2d');
+
+    let hasImage = false;
+    let activeTool = 'rect';
+    let showingOriginal = false;
+
+    let isDrawing = false;
+    let drawStart = null;
+    let drawLast = null;
+
+    let baseViewW = 0;
+    let baseViewH = 0;
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    const minZoom = 1;
+    const maxZoom = 4;
+
+    const pointers = new Map();
+    let pinchStartDistance = 0;
+    let pinchStartZoom = 1;
+    let pinchStartPanX = 0;
+    let pinchStartPanY = 0;
+    let pinchCenterStart = null;
+    let panPointerId = null;
+    let lastPanPoint = null;
+
+    const history = [];
+    const redoStack = [];
+    const HISTORY_LIMIT = 18;
+
+    function updateRangeLabels() {
+      blurValue.textContent = `${blurRange.value} px`;
+      brushValue.textContent = `${brushRange.value} px`;
+    }
+
+    function setTool(tool) {
+      activeTool = tool;
+      toolRectBtn.classList.toggle('active', tool === 'rect');
+      toolCircleBtn.classList.toggle('active', tool === 'circle');
+      toolBrushBtn.classList.toggle('active', tool === 'brush');
+    }
+
+    function updateActionState() {
+      undoBtn.disabled = history.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+      saveBtn.disabled = !hasImage;
+      resetBtn.disabled = !hasImage;
+      fitBtn.disabled = !hasImage;
+      compareBtn.disabled = !hasImage;
+      toolRectBtn.disabled = !hasImage;
+      toolCircleBtn.disabled = !hasImage;
+      toolBrushBtn.disabled = !hasImage;
+      blurRange.disabled = !hasImage;
+      brushRange.disabled = !hasImage;
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function redrawFromWork() {
+      if (!hasImage) {
+        clearCanvas();
+        return;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(showingOriginal ? originalCanvas : workCanvas, 0, 0);
+    }
+
+    function pushHistory() {
+      if (!hasImage) return;
+      history.push(workCtx.getImageData(0, 0, workCanvas.width, workCanvas.height));
+      if (history.length > HISTORY_LIMIT) history.shift();
+      redoStack.length = 0;
+      updateActionState();
+    }
+
+    function applyImageData(imageData) {
+      workCtx.putImageData(imageData, 0, 0);
+      redrawFromWork();
+    }
+
+    function undo() {
+      if (!history.length || !hasImage) return;
+      const current = workCtx.getImageData(0, 0, workCanvas.width, workCanvas.height);
+      redoStack.push(current);
+      const prev = history.pop();
+      applyImageData(prev);
+      updateActionState();
+    }
+
+    function redo() {
+      if (!redoStack.length || !hasImage) return;
+      const current = workCtx.getImageData(0, 0, workCanvas.width, workCanvas.height);
+      history.push(current);
+      const next = redoStack.pop();
+      applyImageData(next);
+      updateActionState();
+    }
+
+    function applyViewTransform() {
+      canvas.style.width = `${baseViewW}px`;
+      canvas.style.height = `${baseViewH}px`;
+      canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    }
+
+    function clampPan() {
+      if (!hasImage) return;
+      const viewW = baseViewW * zoom;
+      const viewH = baseViewH * zoom;
+      const maxX = Math.max(0, (viewW - stageEl.clientWidth) / 2 + 8);
+      const maxY = Math.max(0, (viewH - stageEl.clientHeight) / 2 + 8);
+      panX = Math.max(-maxX, Math.min(maxX, panX));
+      panY = Math.max(-maxY, Math.min(maxY, panY));
+    }
+
+    function resetView() {
+      zoom = 1;
+      panX = 0;
+      panY = 0;
+      applyViewTransform();
+    }
+
+    function fitCanvasToStage() {
+      if (!hasImage) return;
+      const stageWidth = stageEl.clientWidth;
+      const stageHeight = stageEl.clientHeight;
+      const imageRatio = workCanvas.width / workCanvas.height;
+      const stageRatio = stageWidth / stageHeight;
+
+      if (imageRatio > stageRatio) {
+        baseViewW = stageWidth;
+        baseViewH = stageWidth / imageRatio;
+      } else {
+        baseViewH = stageHeight;
+        baseViewW = stageHeight * imageRatio;
+      }
+
+      resetView();
+    }
+
+    function resizeToImage(img) {
+      const maxPixels = 2600 * 2600;
+      const naturalPixels = img.naturalWidth * img.naturalHeight;
+      const scale = naturalPixels > maxPixels ? Math.sqrt(maxPixels / naturalPixels) : 1;
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+
+      [canvas, workCanvas, originalCanvas, tempBlurCanvas].forEach((cv) => {
+        cv.width = w;
+        cv.height = h;
+      });
+
+      [ctx, workCtx, originalCtx, tempBlurCtx].forEach((context) => {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+      });
+
+      workCtx.clearRect(0, 0, w, h);
+      originalCtx.clearRect(0, 0, w, h);
+      workCtx.drawImage(img, 0, 0, w, h);
+      originalCtx.drawImage(img, 0, 0, w, h);
+
+      canvas.style.display = 'block';
+      emptyEl.style.display = 'none';
+
+      hasImage = true;
+      showingOriginal = false;
+      isDrawing = false;
+      pointers.clear();
+      history.length = 0;
+      redoStack.length = 0;
+
+      redrawFromWork();
+      fitCanvasToStage();
+      updateActionState();
+    }
+
+    function getCanvasPoint(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (evt.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (evt.clientY - rect.top) * (canvas.height / rect.height);
+      return {
+        x: Math.max(0, Math.min(canvas.width, x)),
+        y: Math.max(0, Math.min(canvas.height, y)),
+      };
+    }
+
+    function makeBlurLayer() {
+      tempBlurCtx.clearRect(0, 0, tempBlurCanvas.width, tempBlurCanvas.height);
+      tempBlurCtx.filter = `blur(${Number(blurRange.value)}px)`;
+      tempBlurCtx.drawImage(workCanvas, 0, 0);
+      tempBlurCtx.filter = 'none';
+    }
+
+    function blurRect(a, b) {
+      const x = Math.round(Math.min(a.x, b.x));
+      const y = Math.round(Math.min(a.y, b.y));
+      const w = Math.round(Math.abs(a.x - b.x));
+      const h = Math.round(Math.abs(a.y - b.y));
+      if (w < 3 || h < 3) return;
+
+      pushHistory();
+      makeBlurLayer();
+      workCtx.drawImage(tempBlurCanvas, x, y, w, h, x, y, w, h);
+      redrawFromWork();
+    }
+
+    function blurCircle(a, b) {
+      const radius = Math.hypot(b.x - a.x, b.y - a.y);
+      if (radius < 3) return;
+
+      pushHistory();
+      makeBlurLayer();
+
+      workCtx.save();
+      workCtx.beginPath();
+      workCtx.arc(a.x, a.y, radius, 0, Math.PI * 2);
+      workCtx.clip();
+      workCtx.drawImage(tempBlurCanvas, 0, 0);
+      workCtx.restore();
+
+      redrawFromWork();
+    }
+
+    function blurBrush(from, to, radius) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const dist = Math.hypot(dx, dy);
+      const step = Math.max(1, radius * 0.25);
+      const count = Math.max(1, Math.ceil(dist / step));
+
+      for (let i = 0; i <= count; i += 1) {
+        const t = i / count;
+        const x = from.x + dx * t;
+        const y = from.y + dy * t;
+        workCtx.save();
+        workCtx.beginPath();
+        workCtx.arc(x, y, radius, 0, Math.PI * 2);
+        workCtx.clip();
+        workCtx.drawImage(tempBlurCanvas, 0, 0);
+        workCtx.restore();
+      }
+    }
+
+    function drawPreviewRect(a, b) {
+      redrawFromWork();
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      const w = Math.abs(a.x - b.x);
+      const h = Math.abs(a.y - b.y);
+      ctx.save();
+      ctx.strokeStyle = '#0074e8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 6]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(0,116,232,0.15)';
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
+
+    function drawPreviewCircle(a, b) {
+      redrawFromWork();
+      const radius = Math.hypot(b.x - a.x, b.y - a.y);
+      ctx.save();
+      ctx.strokeStyle = '#0074e8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(0,116,232,0.15)';
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function pointDistance(p1, p2) {
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
+
+    function midpoint(p1, p2) {
+      return {
+        x: (p1.x + p2.x) / 2,
+        y: (p1.y + p2.y) / 2,
+      };
+    }
+
+    function startDraw(evt) {
+      const point = getCanvasPoint(evt);
+      isDrawing = true;
+      drawStart = point;
+      drawLast = point;
+
+      if (activeTool === 'brush') {
+        pushHistory();
+        makeBlurLayer();
+        blurBrush(point, point, Number(brushRange.value) / 2);
+        redrawFromWork();
+      }
+    }
+
+    function moveDraw(evt) {
+      if (!isDrawing) return;
+      const point = getCanvasPoint(evt);
+
+      if (activeTool === 'rect') {
+        drawPreviewRect(drawStart, point);
+      } else if (activeTool === 'circle') {
+        drawPreviewCircle(drawStart, point);
+      } else {
+        blurBrush(drawLast, point, Number(brushRange.value) / 2);
+        redrawFromWork();
+      }
+
+      drawLast = point;
+    }
+
+    function endDraw(evt) {
+      if (!isDrawing) return;
+      const point = getCanvasPoint(evt);
+
+      if (activeTool === 'rect') {
+        blurRect(drawStart, point);
+      } else if (activeTool === 'circle') {
+        blurCircle(drawStart, point);
+      }
+
+      isDrawing = false;
+      drawStart = null;
+      drawLast = null;
+      redrawFromWork();
+      updateActionState();
+    }
+
+    function onPointerDown(evt) {
+      if (!hasImage || showingOriginal) return;
+      canvas.setPointerCapture(evt.pointerId);
+      pointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+      if (zoom > 1.02 && pointers.size === 1) {
+        panPointerId = evt.pointerId;
+        lastPanPoint = { x: evt.clientX, y: evt.clientY };
+      }
+
+      if (pointers.size === 2) {
+        const [p1, p2] = Array.from(pointers.values());
+        pinchStartDistance = pointDistance(p1, p2);
+        pinchStartZoom = zoom;
+        pinchStartPanX = panX;
+        pinchStartPanY = panY;
+        pinchCenterStart = midpoint(p1, p2);
+        isDrawing = false;
+        redrawFromWork();
+      } else if (pointers.size === 1 && zoom <= 1.02) {
+        startDraw(evt);
+      }
+    }
+
+    function onPointerMove(evt) {
+      if (!hasImage) return;
+      if (!pointers.has(evt.pointerId)) return;
+
+      pointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+
+      if (pointers.size >= 2) {
+        evt.preventDefault();
+        const [p1, p2] = Array.from(pointers.values());
+        const currentDistance = pointDistance(p1, p2);
+        const centerNow = midpoint(p1, p2);
+
+        if (pinchStartDistance > 0) {
+          zoom = Math.max(minZoom, Math.min(maxZoom, pinchStartZoom * (currentDistance / pinchStartDistance)));
+        }
+
+        panX = pinchStartPanX + (centerNow.x - pinchCenterStart.x);
+        panY = pinchStartPanY + (centerNow.y - pinchCenterStart.y);
+        clampPan();
+        applyViewTransform();
+        return;
+      }
+
+      if (zoom > 1.02) {
+        evt.preventDefault();
+        if (evt.pointerId !== panPointerId) return;
+        if (!lastPanPoint) {
+          lastPanPoint = { x: evt.clientX, y: evt.clientY };
+          return;
+        }
+        panX += evt.clientX - lastPanPoint.x;
+        panY += evt.clientY - lastPanPoint.y;
+        lastPanPoint = { x: evt.clientX, y: evt.clientY };
+        clampPan();
+        applyViewTransform();
+        return;
+      }
+
+      if (isDrawing) {
+        evt.preventDefault();
+        moveDraw(evt);
+      }
+    }
+
+    function onPointerUp(evt) {
+      if (!pointers.has(evt.pointerId)) return;
+
+      const endedWithSingle = pointers.size === 1;
+      pointers.delete(evt.pointerId);
+
+      if (endedWithSingle && zoom <= 1.02 && isDrawing) {
+        evt.preventDefault();
+        endDraw(evt);
+      }
+
+      if (pointers.size < 2) {
+        pinchStartDistance = 0;
+      }
+      if (evt.pointerId === panPointerId) {
+        panPointerId = null;
+        lastPanPoint = null;
+      }
+    }
+
+    function onPointerCancel(evt) {
+      pointers.delete(evt.pointerId);
+      if (isDrawing) {
+        isDrawing = false;
+        redrawFromWork();
+      }
+      if (pointers.size < 2) {
+        pinchStartDistance = 0;
+      }
+      if (evt.pointerId === panPointerId) {
+        panPointerId = null;
+        lastPanPoint = null;
+      }
+    }
+
+    uploadInput.addEventListener('change', (evt) => {
+      const file = evt.target.files?.[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        resizeToImage(img);
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(file);
+      uploadInput.value = '';
+    });
+
+    saveBtn.addEventListener('click', () => {
+      if (!hasImage) return;
+      const link = document.createElement('a');
+      link.download = `blurred_${Date.now()}.png`;
+      link.href = workCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      if (!hasImage) return;
+      history.length = 0;
+      redoStack.length = 0;
+      workCtx.clearRect(0, 0, workCanvas.width, workCanvas.height);
+      workCtx.drawImage(originalCanvas, 0, 0);
+      redrawFromWork();
+      updateActionState();
+    });
+
+    fitBtn.addEventListener('click', () => {
+      fitCanvasToStage();
+      redrawFromWork();
+    });
+
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+    toolRectBtn.addEventListener('click', () => setTool('rect'));
+    toolCircleBtn.addEventListener('click', () => setTool('circle'));
+    toolBrushBtn.addEventListener('click', () => setTool('brush'));
+
+    compareBtn.addEventListener('pointerdown', () => {
+      if (!hasImage) return;
+      showingOriginal = true;
+      compareBtn.textContent = '松开恢复';
+      redrawFromWork();
+    });
+
+    function restoreCompare() {
+      if (!hasImage) return;
+      showingOriginal = false;
+      compareBtn.textContent = '查看原图';
+      redrawFromWork();
+    }
+
+    compareBtn.addEventListener('pointerup', restoreCompare);
+    compareBtn.addEventListener('pointercancel', restoreCompare);
+    compareBtn.addEventListener('lostpointercapture', restoreCompare);
+
+    blurRange.addEventListener('input', updateRangeLabels);
+    brushRange.addEventListener('input', updateRangeLabels);
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerCancel);
+    canvas.addEventListener('lostpointercapture', onPointerCancel);
+
+    window.addEventListener('resize', () => {
+      if (!hasImage) return;
+      fitCanvasToStage();
+      redrawFromWork();
+    });
+
+    updateRangeLabels();
+    updateActionState();
+  </script>
+</body>
+</html>
