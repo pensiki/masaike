@@ -614,6 +614,10 @@
       };
     }
 
+    function touchToXY(touch) {
+      return { x: touch.clientX, y: touch.clientY };
+    }
+
     function startDraw(evt) {
       const point = getCanvasPoint(evt);
       isDrawing = true;
@@ -763,6 +767,109 @@
       }
     }
 
+    function onTouchStart(evt) {
+      if (!hasImage || showingOriginal) return;
+      if (!evt.touches.length) return;
+      evt.preventDefault();
+
+      if (evt.touches.length >= 2) {
+        const p1 = touchToXY(evt.touches[0]);
+        const p2 = touchToXY(evt.touches[1]);
+        pinchStartDistance = pointDistance(p1, p2);
+        pinchStartZoom = zoom;
+        pinchStartPanX = panX;
+        pinchStartPanY = panY;
+        pinchCenterStart = midpoint(p1, p2);
+        isDrawing = false;
+        redrawFromWork();
+        return;
+      }
+
+      if (zoom > 1.02) {
+        lastPanPoint = { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+        return;
+      }
+
+      startDraw(evt.touches[0]);
+    }
+
+    function onTouchMove(evt) {
+      if (!hasImage || !evt.touches.length) return;
+      evt.preventDefault();
+
+      if (evt.touches.length >= 2) {
+        const p1 = touchToXY(evt.touches[0]);
+        const p2 = touchToXY(evt.touches[1]);
+        const currentDistance = pointDistance(p1, p2);
+        const centerNow = midpoint(p1, p2);
+
+        if (pinchStartDistance > 0) {
+          zoom = Math.max(minZoom, Math.min(maxZoom, pinchStartZoom * (currentDistance / pinchStartDistance)));
+        }
+        panX = pinchStartPanX + (centerNow.x - pinchCenterStart.x);
+        panY = pinchStartPanY + (centerNow.y - pinchCenterStart.y);
+        clampPan();
+        applyViewTransform();
+        return;
+      }
+
+      if (zoom > 1.02) {
+        const t = evt.touches[0];
+        if (!lastPanPoint) {
+          lastPanPoint = { x: t.clientX, y: t.clientY };
+          return;
+        }
+        panX += t.clientX - lastPanPoint.x;
+        panY += t.clientY - lastPanPoint.y;
+        lastPanPoint = { x: t.clientX, y: t.clientY };
+        clampPan();
+        applyViewTransform();
+        return;
+      }
+
+      if (isDrawing) {
+        moveDraw(evt.touches[0]);
+      }
+    }
+
+    function onTouchEnd(evt) {
+      if (!hasImage) return;
+
+      if (evt.touches.length >= 2) {
+        const p1 = touchToXY(evt.touches[0]);
+        const p2 = touchToXY(evt.touches[1]);
+        pinchStartDistance = pointDistance(p1, p2);
+        pinchStartZoom = zoom;
+        pinchStartPanX = panX;
+        pinchStartPanY = panY;
+        pinchCenterStart = midpoint(p1, p2);
+        return;
+      }
+
+      if (evt.touches.length === 1) {
+        pinchStartDistance = 0;
+        lastPanPoint = { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+        return;
+      }
+
+      pinchStartDistance = 0;
+      lastPanPoint = null;
+
+      if (isDrawing && zoom <= 1.02 && evt.changedTouches.length) {
+        const t = evt.changedTouches[0];
+        endDraw({ clientX: t.clientX, clientY: t.clientY });
+      }
+    }
+
+    function onTouchCancel() {
+      pinchStartDistance = 0;
+      lastPanPoint = null;
+      if (isDrawing) {
+        isDrawing = false;
+        redrawFromWork();
+      }
+    }
+
     uploadInput.addEventListener('change', (evt) => {
       const file = evt.target.files?.[0];
       if (!file) return;
@@ -821,15 +928,30 @@
     compareBtn.addEventListener('pointerup', restoreCompare);
     compareBtn.addEventListener('pointercancel', restoreCompare);
     compareBtn.addEventListener('lostpointercapture', restoreCompare);
+    compareBtn.addEventListener('touchstart', () => {
+      if (!hasImage) return;
+      showingOriginal = true;
+      compareBtn.textContent = '松开恢复';
+      redrawFromWork();
+    }, { passive: true });
+    compareBtn.addEventListener('touchend', restoreCompare, { passive: true });
+    compareBtn.addEventListener('touchcancel', restoreCompare, { passive: true });
 
     blurRange.addEventListener('input', updateRangeLabels);
     brushRange.addEventListener('input', updateRangeLabels);
 
-    canvas.addEventListener('pointerdown', onPointerDown);
-    canvas.addEventListener('pointermove', onPointerMove);
-    canvas.addEventListener('pointerup', onPointerUp);
-    canvas.addEventListener('pointercancel', onPointerCancel);
-    canvas.addEventListener('lostpointercapture', onPointerCancel);
+    if (window.PointerEvent) {
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('pointercancel', onPointerCancel);
+      canvas.addEventListener('lostpointercapture', onPointerCancel);
+    } else {
+      canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+      canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+      canvas.addEventListener('touchcancel', onTouchCancel, { passive: false });
+    }
 
     window.addEventListener('resize', () => {
       if (!hasImage) return;
